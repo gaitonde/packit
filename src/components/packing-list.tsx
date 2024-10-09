@@ -1,37 +1,112 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { Share2, ChevronDown, Sun, Plus } from 'lucide-react'
 import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 
-const packingItems = [
-  { id: 1, name: 'Beach Swimsuit', category: 'Beach' },
-  { id: 2, name: 'Sunglasses', category: 'Beach' },
-  { id: 3, name: 'Sunscreen', category: 'Beach' },
-  { id: 4, name: 'Hat', category: 'Beach' },
-  { id: 5, name: 'Sandals', category: 'Beach' },
-  { id: 6, name: 'Beach Towel', category: 'Beach' },
-  { id: 7, name: 'Water Bottle', category: 'Gym' },
-  { id: 8, name: 'Gym Shorts', category: 'Gym' },
-  { id: 9, name: 'Gym Shirt', category: 'Gym' },
-]
+interface PackingItem {
+  id: number;
+  text: string;
+  isPacked: boolean;
+}
+
+interface Activity {
+  id: number;
+  name: string;
+  packingItems: PackingItem[];
+}
 
 export function PackingList() {
-  const [checkedItems, setCheckedItems] = useState<number[]>([])
-  const [newItems, setNewItems] = useState<{ [key: string]: string }>({ Beach: '', Gym: '' })
+  const [activities, setActivities] = useState<Activity[]>([])
+  const [newItems, setNewItems] = useState<{ [key: string]: string }>({})
 
-  const toggleItem = (id: number) => {
-    setCheckedItems(prev =>
-      prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]
-    )
+  useEffect(() => {
+    const fetchTripDetails = async () => {
+      try {
+        const response = await fetch('/api/tripDetails?userId=1&tripId=1')
+        if (!response.ok) {
+          throw new Error('Failed to fetch trip details')
+        }
+        const data = await response.json()
+        setActivities(data.activities)
+        setNewItems(Object.fromEntries(data.activities.map((activity: Activity) => [activity.name, ''])))
+      } catch (error) {
+        console.error('Error fetching trip details:', error)
+      }
+    }
+
+    fetchTripDetails()
+  }, [])
+
+  const toggleItem = async (activityId: number, itemId: number) => {
+    console.log("XXXX: ", activityId, itemId);
+    try {
+      const response = await fetch('/api/packingItems', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          id: itemId,
+          activity_id: activityId,
+          is_packed: !activities.find(a => a.id === activityId)?.packingItems.find(i => i.id === itemId)?.isPacked
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to update packing item')
+      }
+
+      setActivities(prevActivities =>
+        prevActivities.map(activity =>
+          activity.id === activityId
+            ? {
+                ...activity,
+                packingItems: activity.packingItems.map(item =>
+                  item.id === itemId ? { ...item, isPacked: !item.isPacked } : item
+                )
+              }
+            : activity
+        )
+      )
+    } catch (error) {
+      console.error('Error updating packing item:', error)
+    }
   }
 
-  const addNewItem = (category: string) => {
-    if (newItems[category].trim() !== '') {
-      // In a real app, you'd add this to the packingItems array
-      setNewItems(prev => ({ ...prev, [category]: '' }))
+  const addNewItem = async (activityId: number, activityName: string) => {
+    if (newItems[activityName].trim() !== '') {
+      try {
+        const response = await fetch('/api/packingItems', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            activity_id: activityId,
+            text: newItems[activityName],
+            is_packed: false,
+          }),
+        })
+
+        if (!response.ok) {
+          throw new Error('Failed to add new packing item')
+        }
+
+        const newItem = await response.json()
+        setActivities(prevActivities =>
+          prevActivities.map(activity =>
+            activity.id === activityId
+              ? { ...activity, packingItems: [...activity.packingItems, newItem] }
+              : activity
+          )
+        )
+        setNewItems(prev => ({ ...prev, [activityName]: '' }))
+      } catch (error) {
+        console.error('Error adding new packing item:', error)
+      }
     }
   }
 
@@ -68,40 +143,39 @@ export function PackingList() {
           <div className="mt-1 text-sm text-gray-500">▼ 63° ▲ 71°</div>
         </div>
 
-        {['Beach', 'Gym'].map((category) => (
-          <div key={category}>
+        {activities.map((activity) => (
+          <div key={activity.id}>
             <div className="p-4 border-b border-gray-200">
               <div className="flex justify-between items-center">
-                <h2 className="text-lg font-semibold text-teal-700">{category.toUpperCase()}</h2>
+                <h2 className="text-lg font-semibold text-teal-700">{activity.name.toUpperCase()}</h2>
                 <span className="text-sm text-teal-600">
-                  {checkedItems.filter(id => packingItems.find(item => item.id === id)?.category === category).length}/
-                  {packingItems.filter(item => item.category === category).length}
+                  {activity.packingItems.filter(item => item.isPacked).length}/{activity.packingItems.length}
                 </span>
               </div>
             </div>
-            {packingItems.filter(item => item.category === category).map((item) => (
+            {activity.packingItems.map((item) => (
               <div key={item.id} className="flex items-center p-4 border-b border-gray-200">
                 <Checkbox
                   id={`item-${item.id}`}
-                  checked={checkedItems.includes(item.id)}
-                  onCheckedChange={() => toggleItem(item.id)}
+                  checked={item.isPacked}
+                  onCheckedChange={() => toggleItem(activity.id, item.id)}
                   className="border-2 border-teal-400 rounded-full h-6 w-6"
                 />
                 <label
                   htmlFor={`item-${item.id}`}
-                  className={`ml-4 text-lg ${checkedItems.includes(item.id) ? 'line-through text-gray-400' : 'text-gray-800'}`}
+                  className={`ml-4 text-lg ${item.isPacked ? 'line-through text-gray-400' : 'text-gray-800'}`}
                 >
-                  {item.name}
+                  {item.text}
                 </label>
               </div>
             ))}
             <div className="flex items-center p-4 border-b border-gray-200">
               <Plus className="h-6 w-6 text-teal-500 mr-4" />
               <Input
-                placeholder={`Type new ${category.toLowerCase()} item...`}
-                value={newItems[category]}
-                onChange={(e) => setNewItems(prev => ({ ...prev, [category]: e.target.value }))}
-                onKeyPress={(e) => e.key === 'Enter' && addNewItem(category)}
+                placeholder={`Type new ${activity.name.toLowerCase()} item...`}
+                value={newItems[activity.name] || ''}
+                onChange={(e) => setNewItems(prev => ({ ...prev, [activity.name]: e.target.value }))}
+                onKeyPress={(e) => e.key === 'Enter' && addNewItem(activity.id, activity.name)}
                 className="flex-grow text-lg placeholder-gray-400 border-none focus:ring-0"
               />
             </div>

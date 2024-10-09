@@ -1,11 +1,9 @@
-import { PackingList } from "@/components/packing-list";
+import { TravelInfo } from "@/components/travel-info";
 
 export default function Home() {
   return (
-    <>
-      {/* <main style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}> */}
-        <PackingList />
-      {/* </main> */}
-    </>
-  );
+    // <main className="flex min-h-screen flex-col items-center justify-between p-2">
+      <TravelInfo />
+    // </main>
+  )
 }
